@@ -304,9 +304,11 @@ func (c *client) attempt(ctx context.Context, info CallInfo, body []byte, out an
 		}
 		return nil
 	case http.StatusBadRequest:
-		return &ValidationError{Msg: c.errMessage(resp, "bad request")}
+		kind, msg := c.errPayload(resp, "bad request")
+		return &ValidationError{Kind: kind, Msg: msg}
 	case http.StatusInternalServerError:
-		return &ServerError{Msg: c.errMessage(resp, "internal server error")}
+		_, msg := c.errPayload(resp, "internal server error")
+		return &ServerError{Msg: msg}
 	default:
 		return &TransportError{
 			Procedure:  info.Procedure,
@@ -316,12 +318,15 @@ func (c *client) attempt(ctx context.Context, info CallInfo, body []byte, out an
 	}
 }
 
-func (c *client) errMessage(resp *http.Response, fallback string) string {
-	var e jsendError
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxErrorBodyBytes)).Decode(&e); err != nil || e.Message == "" {
-		return fallback
+// errPayload достаёт kind и message из конверта ошибки. Тело чужое: если оно
+// не разбирается или пустое, берётся дефолтное сообщение — молчаливой потери
+// ошибки не происходит, код ответа уже определил класс.
+func (c *client) errPayload(resp *http.Response, fallback string) (kind, message string) {
+	var e errorBody
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxErrorBodyBytes)).Decode(&e); err != nil || e.Error.Message == "" {
+		return e.Error.Kind, fallback
 	}
-	return e.Message
+	return e.Error.Kind, e.Error.Message
 }
 
 // retryable: повторяем только то, что заведомо не выполнилось или явно просит

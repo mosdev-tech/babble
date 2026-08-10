@@ -185,9 +185,17 @@ func TestUnknownMethodAndHealth(t *testing.T) {
 	if resp.code != http.StatusNotFound {
 		t.Fatalf("want 404, got %d", resp.code)
 	}
-	var body map[string]string
+	var body struct {
+		Error struct {
+			Kind    string `json:"kind"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
 	if err := json.Unmarshal([]byte(resp.body), &body); err != nil {
 		t.Fatalf("404 must be JSON, got %s", resp.body)
+	}
+	if body.Error.Kind != "not_found" || body.Error.Message == "" {
+		t.Fatalf("404 must carry the error envelope, got %s", resp.body)
 	}
 
 	health, err := http.Get(ts.URL + babble.HealthPath)

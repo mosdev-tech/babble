@@ -25,15 +25,20 @@ paths:
             schema: {$ref: '#/components/schemas/DoItIn'}
       responses:
         200: {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/DoItOut'}}}}
-        400: {description: Bad, content: {application/json: {schema: {$ref: '#/components/schemas/JSendError'}}}}
-        500: {description: Err, content: {application/json: {schema: {$ref: '#/components/schemas/JSendError'}}}}
+        400: {description: Bad, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        500: {description: Err, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
 components:
   schemas:
-    JSendError:
+    Error:
       type: object
-      required: [status, message]
+      required: [error]
       properties:
-        status: {type: string}
+        error: {$ref: '#/components/schemas/ErrorInfo'}
+    ErrorInfo:
+      type: object
+      required: [message]
+      properties:
+        kind: {type: string}
         message: {type: string}
     DoItIn:
       type: object

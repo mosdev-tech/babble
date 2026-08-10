@@ -254,7 +254,7 @@ func (s *Server) Run(ctx context.Context) error {
 //
 // Маршруты — точное совпадение пути (профиль rpc: путь ровно /{operationId}),
 // поэтому вместо ServeMux используется прямой поиск по карте: он даёт полный
-// контроль над 404/405, которые тоже обязаны быть JSend-ошибками.
+// контроль над 404/405, которые тоже обязаны отдавать конверт ошибки.
 
 func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == HealthPath {
@@ -265,12 +265,12 @@ func (s *Server) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/")
 	reg, ok := s.methods[name]
 	if !ok || strings.Contains(name, "/") {
-		writeJSON(w, http.StatusNotFound, jsendError{Status: "error", Message: "not found"})
+		writeJSON(w, http.StatusNotFound, validationBody(KindNotFound, "not found"))
 		return
 	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
-		writeJSON(w, http.StatusMethodNotAllowed, jsendError{Status: "error", Message: "method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, validationBody(KindMethodNotAllowed, "method not allowed"))
 		return
 	}
 
@@ -320,7 +320,7 @@ func (s *Server) decode(r *http.Request, dst any) error {
 func (s *Server) serveHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
-		writeJSON(w, http.StatusMethodNotAllowed, jsendError{Status: "error", Message: "method not allowed"})
+		writeJSON(w, http.StatusMethodNotAllowed, validationBody(KindMethodNotAllowed, "method not allowed"))
 		return
 	}
 	if s.health != nil {
@@ -337,13 +337,13 @@ func (s *Server) serveHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) writeError(ctx context.Context, w http.ResponseWriter, err error) {
 	if ve, ok := AsValidationError(err); ok {
-		writeJSON(w, http.StatusBadRequest, jsendError{Status: "error", Message: ve.Error()})
+		writeJSON(w, http.StatusBadRequest, validationBody(ve.KindOr(), ve.Error()))
 		return
 	}
 	if s.errorLog != nil {
 		s.errorLog(ctx, err)
 	}
-	writeJSON(w, http.StatusInternalServerError, jsendError{Status: "error", Message: "internal server error"})
+	writeJSON(w, http.StatusInternalServerError, serverBody("internal server error"))
 }
 
 // recoverer отдаёт JSON при панике: стандартный net/http просто рвёт
@@ -361,7 +361,7 @@ func (s *Server) recoverer(next http.Handler) http.Handler {
 			if s.errorLog != nil {
 				s.errorLog(r.Context(), fmt.Errorf("panic recovered: %v", rec))
 			}
-			writeJSON(w, http.StatusInternalServerError, jsendError{Status: "error", Message: "internal server error"})
+			writeJSON(w, http.StatusInternalServerError, serverBody("internal server error"))
 		}()
 		next.ServeHTTP(w, r)
 	})

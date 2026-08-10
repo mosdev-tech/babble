@@ -51,12 +51,57 @@ func (l *Lint) checkRoot() {
 	if len(l.spec.Paths) == 0 {
 		l.errf("paths must declare at least one method")
 	}
-	if _, ok := l.spec.Components.Schemas[jsendErrorSchema]; !ok {
-		l.errf("components.schemas.%s is required (error envelope for 400/500)", jsendErrorSchema)
-	}
+	l.checkErrorEnvelope()
 }
 
-const jsendErrorSchema = "JSendError"
+// Конверт ошибки — часть протокола, а не контракта конкретного сервиса:
+// имена схем и их форма зафиксированы, чтобы 400/500 у всех сервисов
+// выглядели одинаково.
+const (
+	errorSchema     = "Error"
+	errorInfoSchema = "ErrorInfo"
+)
+
+func (l *Lint) checkErrorEnvelope() {
+	env, ok := l.spec.Components.Schemas[errorSchema]
+	if !ok {
+		l.errf("components.schemas.%s is required (error envelope for 400/500)", errorSchema)
+		return
+	}
+	if env == nil || len(env.Required) != 1 || env.Required[0] != "error" ||
+		len(env.Properties) != 1 || env.Properties["error"] == nil ||
+		RefName(env.Properties["error"].Ref) != errorInfoSchema {
+		l.errf("schema %s: must be exactly {required: [error], properties: {error: $ref %s}}", errorSchema, errorInfoSchema)
+	}
+
+	info, ok := l.spec.Components.Schemas[errorInfoSchema]
+	if !ok {
+		l.errf("components.schemas.%s is required (kind + message inside the error envelope)", errorInfoSchema)
+		return
+	}
+	if info == nil {
+		return
+	}
+	// kind опционален: на 500 наружу уходит только message.
+	if len(info.Required) != 1 || info.Required[0] != "message" {
+		l.errf("schema %s: required must be [message] (kind is optional: 500 carries only the message)", errorInfoSchema)
+	}
+	for _, prop := range []string{"kind", "message"} {
+		p := info.Properties[prop]
+		if p == nil {
+			l.errf("schema %s: property %q is required", errorInfoSchema, prop)
+			continue
+		}
+		if p.Type != "string" {
+			l.errf("schema %s: property %q must be a string", errorInfoSchema, prop)
+		}
+	}
+	for prop := range info.Properties {
+		if prop != "kind" && prop != "message" {
+			l.errf("schema %s: property %q is not allowed (only kind and message)", errorInfoSchema, prop)
+		}
+	}
+}
 
 func (l *Lint) checkPaths() {
 	paths := make([]string, 0, len(l.spec.Paths))
@@ -130,7 +175,7 @@ func (l *Lint) checkResponses(path, method string, op *Operation) {
 		}
 		schema := method + "Out"
 		if code != "200" {
-			schema = jsendErrorSchema
+			schema = errorSchema
 		}
 		l.checkContent(path, "response "+code, resp.Content, schema)
 	}

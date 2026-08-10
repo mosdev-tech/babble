@@ -27,13 +27,13 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSendError'
+                $ref: '#/components/schemas/Error'
         500:
           description: Internal Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSendError'
+                $ref: '#/components/schemas/Error'
 
   /getById:
     post:
@@ -58,22 +58,30 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSendError'
+                $ref: '#/components/schemas/Error'
         500:
           description: Internal Error
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JSendError'
+                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
-    JSendError:
+    Error:
       type: object
       description: "Конверт транспортной ошибки (400/500)"
-      required: [ status, message ]
+      required: [ error ]
       properties:
-        status:
+        error:
+          $ref: '#/components/schemas/ErrorInfo'
+
+    ErrorInfo:
+      type: object
+      description: "Тело ошибки: kind есть на 400, на 500 остаётся только message"
+      required: [ message ]
+      properties:
+        kind:
           type: string
         message:
           type: string

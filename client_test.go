@@ -63,7 +63,7 @@ func TestNoRetryOn500(t *testing.T) {
 	var calls atomic.Int32
 	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
 		calls.Add(1)
-		writeJSON(w, http.StatusInternalServerError, jsendError{Status: "error", Message: "boom"})
+		writeJSON(w, http.StatusInternalServerError, serverBody("boom"))
 	})
 
 	var o out
@@ -93,7 +93,7 @@ func TestErrorMapping(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
-				writeJSON(w, tc.status, jsendError{Status: "error", Message: "nope"})
+				writeJSON(w, tc.status, validationBody(KindValidation, "nope"))
 			})
 			var o out
 			err := c.Invoke(context.Background(), "m", &in{}, &o, CallOpts{})
@@ -162,5 +162,25 @@ func TestInterceptorSeesOneLogicalCall(t *testing.T) {
 func TestEnvVarForService(t *testing.T) {
 	if got := EnvVarForService("user-profiles"); got != "SERVICE_USER_PROFILES_URL" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// Kind переживает провод: клиент восстанавливает его из тела 400.
+func TestKindSurvivesTheWire(t *testing.T) {
+	c := testClient(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusBadRequest, validationBody("not_found", "car with id 113218 does not exist"))
+	})
+
+	var o out
+	err := c.Invoke(context.Background(), "m", &in{}, &o, CallOpts{})
+	ve, ok := AsValidationError(err)
+	if !ok {
+		t.Fatalf("want ValidationError, got %#v", err)
+	}
+	if ve.Kind != "not_found" {
+		t.Fatalf("kind lost: %q", ve.Kind)
+	}
+	if ve.Msg != "car with id 113218 does not exist" {
+		t.Fatalf("message lost: %q", ve.Msg)
 	}
 }

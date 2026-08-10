@@ -9,17 +9,45 @@ import (
 // нарушил контракт) и ServerError (сервер не смог). Бизнес-ошибки в транспорт
 // не выносятся — они описываются в схеме ответа.
 
+// Классы ошибок, которые проставляет сам рантайм. Kind — открытое множество:
+// сервис вправе завести свои значения через ValidationError.WithKind.
+const (
+	KindValidation       = "validation"
+	KindNotFound         = "not_found"
+	KindMethodNotAllowed = "method_not_allowed"
+)
+
 // ValidationError — клиент нарушил контракт: невалидный JSON, нарушено
 // ограничение схемы, несуществующий идентификатор. Отдаётся как HTTP 400.
 type ValidationError struct {
 	// Field — путь поля, на котором сломалась валидация ("items[3].role").
 	// Пустой, если ошибка не привязана к полю.
 	Field string
-	Msg   string
+	// Kind — машиночитаемый класс ошибки; уезжает в тело как error.kind.
+	// Пустой означает KindValidation.
+	Kind string
+	Msg  string
 }
 
 func NewValidationError(format string, args ...any) *ValidationError {
 	return &ValidationError{Msg: fmt.Sprintf(format, args...)}
+}
+
+// WithKind проставляет класс ошибки, отличный от validation:
+//
+//	return nil, babble.NewValidationError("car with id %d does not exist", id).
+//		WithKind("not_found")
+func (e *ValidationError) WithKind(kind string) *ValidationError {
+	e.Kind = kind
+	return e
+}
+
+// KindOr возвращает Kind, подставляя KindValidation вместо пустого.
+func (e *ValidationError) KindOr() string {
+	if e.Kind == "" {
+		return KindValidation
+	}
+	return e.Kind
 }
 
 func newFieldError(path, format string, args ...any) *ValidationError {
@@ -91,10 +119,28 @@ func AsServerError(err error) (*ServerError, bool) {
 	return target, ok
 }
 
-// jsendError — единый формат тела ошибки на проводе.
-type jsendError struct {
-	Status  string `json:"status"`
+// errorBody — единый формат тела ошибки на проводе:
+//
+//	400 {"error": {"kind": "validation", "message": "..."}}
+//	500 {"error": {"message": "internal server error"}}
+//
+// kind есть только там, где он что-то значит для вызывающего: на 500 наружу не
+// выносится ничего, кроме сообщения.
+type errorBody struct {
+	Error errorPayload `json:"error"`
+}
+
+type errorPayload struct {
+	Kind    string `json:"kind,omitempty"`
 	Message string `json:"message"`
+}
+
+func validationBody(kind, msg string) errorBody {
+	return errorBody{Error: errorPayload{Kind: kind, Message: msg}}
+}
+
+func serverBody(msg string) errorBody {
+	return errorBody{Error: errorPayload{Message: msg}}
 }
 
 // maxErrorBodyBytes ограничивает объём чужого тела, который клиент утащит в

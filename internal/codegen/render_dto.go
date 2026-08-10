@@ -273,10 +273,10 @@ func renderValidate(b *buf, st *Struct) {
 		case f.Optional():
 			// Срез или карта: nil означает «не задано», проверять нечего.
 			b.p("\tif d.%s != nil {", f.GoName)
-			renderChecks(b, "\t\t", "d."+f.GoName, "&d."+f.GoName, fieldPath, f.Type)
+			renderChecks(b, "\t\t", "d."+f.GoName, "(&d."+f.GoName+")", fieldPath, f.Type)
 			b.p("\t}")
 		default:
-			renderChecks(b, "\t", "d."+f.GoName, "&d."+f.GoName, fieldPath, f.Type)
+			renderChecks(b, "\t", "d."+f.GoName, "(&d."+f.GoName+")", fieldPath, f.Type)
 		}
 	}
 
@@ -361,12 +361,12 @@ func renderChecks(b *buf, indent, value, addr, pathExpr string, t *TypeRef) {
 		if t.Kind == KindArray {
 			b.p("%sfor i_ := range %s {", indent, value)
 			elemPath := fmt.Sprintf("babble.Index(%s, i_)", pathExpr)
-			renderChecks(b, indent+"\t", fmt.Sprintf("%s[i_]", value), fmt.Sprintf("&%s[i_]", value), elemPath, t.Elem)
+			renderChecks(b, indent+"\t", fmt.Sprintf("%s[i_]", value), fmt.Sprintf("(&%s[i_])", value), elemPath, t.Elem)
 			b.p("%s}", indent)
 		} else {
 			b.p("%sfor k_, e_ := range %s {", indent, value)
 			elemPath := fmt.Sprintf("babble.Key(%s, k_)", pathExpr)
-			renderChecks(b, indent+"\t", "e_", "&e_", elemPath, t.Elem)
+			renderChecks(b, indent+"\t", "e_", "(&e_)", elemPath, t.Elem)
 			b.p("%s}", indent)
 		}
 	}

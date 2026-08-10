@@ -34,8 +34,8 @@ paths:
             schema: { $ref: '#/components/schemas/GetByIdIn' }
       responses:
         200: { description: OK,            content: { application/json: { schema: { $ref: '#/components/schemas/GetByIdOut' } } } }
-        400: { description: Bad request,   content: { application/json: { schema: { $ref: '#/components/schemas/JSendError' } } } }
-        500: { description: Internal Error, content: { application/json: { schema: { $ref: '#/components/schemas/JSendError' } } } }
+        400: { description: Bad request,   content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        500: { description: Internal Error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
 components:
   schemas:
@@ -56,12 +56,17 @@ components:
       properties:
         id:    { type: integer, format: int64 }
         phone: { type: string }
-    JSendError:
+    Error:
       type: object
       description: "Конверт транспортной ошибки (400/500)"
-      required: [ status, message ]
+      required: [ error ]
       properties:
-        status:  { type: string }
+        error: { $ref: '#/components/schemas/ErrorInfo' }
+    ErrorInfo:
+      type: object
+      required: [ message ]
+      properties:
+        kind:    { type: string }
         message: { type: string }
 ```
 
@@ -157,6 +162,25 @@ OpenAPI используется как синтаксис, но допуска�
 | сервер не смог | 500 | `*babble.ServerError` |
 
 Что угодно ещё — `*babble.TransportError`.
+
+Тело ошибки одинаково у всех сервисов — схемы `Error`/`ErrorInfo` в контракте,
+их форму проверяет линт:
+
+```json
+400 {"error": {"kind": "validation", "message": "car with id 113218 does not exist"}}
+500 {"error": {"message": "internal server error"}}
+```
+
+`kind` — машиночитаемая причина 400; рантайм ставит `validation`, `not_found`
+(неизвестный метод) и `method_not_allowed`, сервис задаёт свой:
+
+```go
+return nil, babble.NewValidationError("car with id %d does not exist", id).
+    WithKind("not_found")
+```
+
+На клиенте он доезжает как `(*babble.ValidationError).Kind`. На 500 `kind` не
+отдаётся: наружу уходит только сообщение, детали пишутся в лог.
 
 **Бизнес-ошибки в транспорт не выносятся** — они живут в DTO ответа как сумма
 вариантов (`x-babble-oneof`), у которой кодоген генерирует конструкторы и

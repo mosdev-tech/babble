@@ -22,15 +22,20 @@ paths:
             schema: {$ref: '#/components/schemas/CreateIn'}
       responses:
         200: {description: OK, content: {application/json: {schema: {$ref: '#/components/schemas/CreateOut'}}}}
-        400: {description: Bad, content: {application/json: {schema: {$ref: '#/components/schemas/JSendError'}}}}
-        500: {description: Err, content: {application/json: {schema: {$ref: '#/components/schemas/JSendError'}}}}
+        400: {description: Bad, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+        500: {description: Err, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
 components:
   schemas:
-    JSendError:
+    Error:
       type: object
-      required: [status, message]
+      required: [error]
       properties:
-        status: {type: string}
+        error: {$ref: '#/components/schemas/ErrorInfo'}
+    ErrorInfo:
+      type: object
+      required: [message]
+      properties:
+        kind: {type: string}
         message: {type: string}
     CreateIn:
       type: object
@@ -96,7 +101,7 @@ func TestProfileViolations(t *testing.T) {
 			name: "extra status code",
 			edit: func(s string) string {
 				return strings.Replace(s, "        500:",
-					"        409: {description: Conflict, content: {application/json: {schema: {$ref: '#/components/schemas/JSendError'}}}}\n        500:", 1)
+					"        409: {description: Conflict, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}\n        500:", 1)
 			},
 			want: "is not allowed (only 200, 400, 500)",
 		},
@@ -202,5 +207,55 @@ func TestOptionalCycleIsAllowed(t *testing.T) {
 		if strings.Contains(e.Msg, "cycle") {
 			t.Fatalf("optional recursion rejected: %v", e)
 		}
+	}
+}
+
+// Конверт ошибки одинаков у всех сервисов: свою форму подсунуть нельзя.
+func TestErrorEnvelopeShapeIsFixed(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(string) string
+		want string
+	}{
+		{
+			name: "envelope is required",
+			edit: func(s string) string {
+				return strings.Replace(s, "    Error:\n      type: object\n      required: [error]\n      properties:\n        error: {$ref: '#/components/schemas/ErrorInfo'}\n", "", 1)
+			},
+			want: "components.schemas.Error is required",
+		},
+		{
+			name: "message must be required",
+			edit: func(s string) string {
+				return strings.Replace(s, "    ErrorInfo:\n      type: object\n      required: [message]", "    ErrorInfo:\n      type: object\n      required: [kind]", 1)
+			},
+			want: "required must be [message]",
+		},
+		{
+			name: "extra fields are rejected",
+			edit: func(s string) string {
+				return strings.Replace(s, "        kind: {type: string}", "        kind: {type: string}\n        code: {type: string}", 1)
+			},
+			want: `property "code" is not allowed`,
+		},
+		{
+			name: "kind must be a string",
+			edit: func(s string) string {
+				return strings.Replace(s, "        kind: {type: string}", "        kind: {type: integer}", 1)
+			},
+			want: `property "kind" must be a string`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			errs := lintYAML(t, tc.edit(validSpec))
+			for _, e := range errs {
+				if strings.Contains(e.Msg, tc.want) {
+					return
+				}
+			}
+			t.Fatalf("want error containing %q, got %v", tc.want, errs)
+		})
 	}
 }
