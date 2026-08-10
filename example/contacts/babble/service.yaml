@@ -1,0 +1,85 @@
+openapi: "3.0.0"
+info:
+  title: Contacts API
+  version: "1.0.0"
+x-babble-service: contacts
+
+paths:
+  /sync:
+    post:
+      operationId: sync
+      summary: "Синхронизирует контакт пользователя"
+      x-babble-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SyncIn'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncOut'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+        500:
+          description: Internal Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+
+components:
+  schemas:
+    JSendError:
+      type: object
+      description: "Конверт транспортной ошибки (400/500)"
+      required: [ status, message ]
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    SyncIn:
+      type: object
+      required: [ userId, phone ]
+      properties:
+        userId:
+          type: integer
+          format: int64
+          minimum: 1
+        phone:
+          type: string
+          minLength: 3
+
+    SyncOut:
+      type: object
+      required: [ contactId ]
+      properties:
+        contactId:
+          type: string
+        error:
+          $ref: '#/components/schemas/SyncError'
+
+    SyncError:
+      type: object
+      x-babble-oneof: true
+      properties:
+        unknownUser:
+          $ref: '#/components/schemas/UnknownUserError'
+
+    UnknownUserError:
+      type: object
+      required: [ userId ]
+      properties:
+        userId:
+          type: integer
+          format: int64

@@ -1,0 +1,178 @@
+openapi: "3.0.0"
+x-babble-service: users
+info:
+  title: Users API
+  version: "1.0.0"
+
+paths:
+  /create:
+    post:
+      operationId: create
+      summary: "Создаёт нового пользователя"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIn'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateOut'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+        500:
+          description: Internal Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+
+  /getById:
+    post:
+      operationId: getById
+      summary: "Возвращает пользователя по идентификатору"
+      x-babble-idempotent: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetByIdIn'
+      responses:
+        200:
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetByIdOut'
+        400:
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+        500:
+          description: Internal Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JSendError'
+
+components:
+  schemas:
+    JSendError:
+      type: object
+      description: "Конверт транспортной ошибки (400/500)"
+      required: [ status, message ]
+      properties:
+        status:
+          type: string
+        message:
+          type: string
+
+    CreateIn:
+      type: object
+      required: [ phone, role ]
+      properties:
+        phone:
+          type: string
+          pattern: '^\+[0-9]{10,15}$'
+        role:
+          type: string
+          enum: [ STUDENT, ADMIN ]
+        firstName:
+          type: string
+          maxLength: 100
+        lastName:
+          type: string
+          maxLength: 100
+
+    CreateOut:
+      type: object
+      required: [ ok ]
+      properties:
+        ok:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserEntity'
+        error:
+          $ref: '#/components/schemas/CreateError'
+
+    # Бизнес-ошибки живут в DTO ответа, а не в кодах HTTP: ровно один вариант
+    # может быть непустым.
+    CreateError:
+      type: object
+      x-babble-oneof: true
+      properties:
+        phoneTaken:
+          $ref: '#/components/schemas/PhoneTakenError'
+        roleNotAllowed:
+          $ref: '#/components/schemas/RoleNotAllowedError'
+
+    PhoneTakenError:
+      type: object
+      required: [ existingUserId ]
+      properties:
+        existingUserId:
+          type: integer
+          format: int64
+
+    RoleNotAllowedError:
+      type: object
+      required: [ role ]
+      properties:
+        role:
+          type: string
+          enum: [ STUDENT, ADMIN ]
+
+    GetByIdIn:
+      type: object
+      required: [ id ]
+      properties:
+        id:
+          type: integer
+          format: int64
+          minimum: 1
+
+    GetByIdOut:
+      type: object
+      required: [ found ]
+      properties:
+        found:
+          type: boolean
+        user:
+          $ref: '#/components/schemas/UserEntity'
+
+    UserEntity:
+      type: object
+      description: "Пользователь"
+      required: [ id, phone, role, createdAt ]
+      properties:
+        id:
+          type: integer
+          format: int64
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [ STUDENT, ADMIN ]
+        firstName:
+          type: string
+        lastName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          maxItems: 16
+          items:
+            type: string
