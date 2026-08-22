@@ -55,35 +55,48 @@ func Generate(root string) error {
 		return err
 	}
 
-	specPath := filepath.Join(root, ServiceSpec)
-	specData, err := os.ReadFile(specPath)
-	if err != nil {
+	// Сервисный контракт необязателен: BFF, воркеру или CLI нужен только
+	// исходящий вызов, своих методов они не публикуют. Тогда генерируются
+	// одни клиенты — сервер, DTO и стабы не появляются.
+	specData, err := os.ReadFile(filepath.Join(root, ServiceSpec))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("read %s: %w", ServiceSpec, err)
 	}
-	spec, err := ParseSpec(specData, ServiceSpec)
-	if err != nil {
-		return err
-	}
-	if errs := LintSpec(spec); len(errs) > 0 {
-		return lintFailure(errs)
-	}
-	model, err := BuildModel(spec)
-	if err != nil {
-		return err
-	}
+	clientsOnly := err != nil
 
-	dtoImport := module + "/" + ServiceOut + "/dto"
-	specSum := sum(specData)
+	var (
+		spec      *Spec
+		model     *Model
+		dtoImport string
+	)
 
 	files := map[string]string{}
-	files[filepath.Join(ServiceOut, "sdk.go")] = RenderServerSDK(model, dtoImport, ServiceSpec, specSum)
-	files[filepath.Join(ServiceOut, "dto", "dto.go")] = RenderDTO("dto", model, ServiceSpec, specSum)
-	files[filepath.Join(ServiceOut, "dto", "const.go")] = RenderConst("dto", model, ServiceSpec, specSum)
 
-	// Self-client: клиент к своему же сервису, нужен интеграционным тестам.
-	selfPkg := SafeIdent(PackageName(spec.Service))
-	if err := addClient(files, selfPkg, spec.Service, model, ServiceSpec, specSum); err != nil {
-		return err
+	if !clientsOnly {
+		spec, err = ParseSpec(specData, ServiceSpec)
+		if err != nil {
+			return err
+		}
+		if errs := LintSpec(spec); len(errs) > 0 {
+			return lintFailure(errs)
+		}
+		model, err = BuildModel(spec)
+		if err != nil {
+			return err
+		}
+
+		dtoImport = module + "/" + ServiceOut + "/dto"
+		specSum := sum(specData)
+
+		files[filepath.Join(ServiceOut, "sdk.go")] = RenderServerSDK(model, dtoImport, ServiceSpec, specSum)
+		files[filepath.Join(ServiceOut, "dto", "dto.go")] = RenderDTO("dto", model, ServiceSpec, specSum)
+		files[filepath.Join(ServiceOut, "dto", "const.go")] = RenderConst("dto", model, ServiceSpec, specSum)
+
+		// Self-client: клиент к своему же сервису, нужен интеграционным тестам.
+		selfPkg := SafeIdent(PackageName(spec.Service))
+		if err := addClient(files, selfPkg, spec.Service, model, ServiceSpec, specSum); err != nil {
+			return err
+		}
 	}
 
 	clients, err := listClientSpecs(root)
@@ -106,7 +119,7 @@ func Generate(root string) error {
 		if cspec.Service != name {
 			return fmt.Errorf("%s: x-babble-service is %q but the file is named %q.yaml", relPath, cspec.Service, name)
 		}
-		if cspec.Service == spec.Service {
+		if spec != nil && cspec.Service == spec.Service {
 			return fmt.Errorf("%s: client for own service is generated automatically, remove this file", relPath)
 		}
 		cmodel, err := BuildModel(cspec)
@@ -117,6 +130,10 @@ func Generate(root string) error {
 		if err := addClient(files, pkg, name, cmodel, relPath, sum(data)); err != nil {
 			return err
 		}
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("nothing to generate: neither %s nor %s/*.yaml found", ServiceSpec, ClientsDir)
 	}
 
 	formatted, err := formatAll(files)
@@ -139,6 +156,10 @@ func Generate(root string) error {
 			return fmt.Errorf("write %s: %w", rel, err)
 		}
 		fmt.Println("wrote", rel)
+	}
+
+	if clientsOnly {
+		return nil
 	}
 
 	return writeStubs(root, model, dtoImport)

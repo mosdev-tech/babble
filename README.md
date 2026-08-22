@@ -107,6 +107,20 @@ internal/
   api/<method>/handler.go    # стаб; пишется один раз, кодоген его не трогает
 ```
 
+### Проект без своих методов
+
+`babble/service.yaml` необязателен. Если его нет, `gen` генерирует одни
+клиенты — ни серверного SDK, ни DTO, ни стабов. Это раскладка BFF, воркера или
+CLI: они только вызывают чужие методы и своих не публикуют.
+
+```
+babble/
+  clients/auth.yaml
+  clients/users.yaml
+internal/
+  generated/clients/{auth,users}/{sdk.go,dto.go,const.go}
+```
+
 ## Команды
 
 ```sh

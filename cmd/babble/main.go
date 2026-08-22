@@ -53,7 +53,12 @@ func run(args []string) error {
 
 func lint(root string) error {
 	var failed bool
-	paths := []string{codegen.ServiceSpec}
+	var paths []string
+
+	// Сервисный контракт необязателен: у клиентских проектов его нет.
+	if _, err := os.Stat(filepath.Join(root, codegen.ServiceSpec)); err == nil {
+		paths = append(paths, codegen.ServiceSpec)
+	}
 
 	entries, err := os.ReadDir(filepath.Join(root, codegen.ClientsDir))
 	if err == nil {
@@ -62,6 +67,10 @@ func lint(root string) error {
 				paths = append(paths, filepath.Join(codegen.ClientsDir, e.Name()))
 			}
 		}
+	}
+
+	if len(paths) == 0 {
+		return fmt.Errorf("nothing to lint: neither %s nor %s/*.yaml found", codegen.ServiceSpec, codegen.ClientsDir)
 	}
 
 	for _, rel := range paths {
