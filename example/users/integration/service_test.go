@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/mosdev-tech/babble"
-	"github.com/mosdev-tech/babble/users/internal/api/create"
-	get_by_id "github.com/mosdev-tech/babble/users/internal/api/get_by_id"
+	"github.com/mosdev-tech/babble/users/internal/api/handler/create"
+	get_by_id "github.com/mosdev-tech/babble/users/internal/api/handler/get_by_id"
 	"github.com/mosdev-tech/babble/users/internal/generated/clients/contacts"
 	"github.com/mosdev-tech/babble/users/internal/generated/clients/users"
 	"github.com/mosdev-tech/babble/users/internal/generated/service"

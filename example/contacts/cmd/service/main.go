@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/mosdev-tech/babble"
-	"github.com/mosdev-tech/babble/contacts/internal/api/sync"
+	"github.com/mosdev-tech/babble/contacts/internal/api/handler/sync"
 	"github.com/mosdev-tech/babble/contacts/internal/generated/service"
 )
 

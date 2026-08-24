@@ -71,7 +71,7 @@ components:
 ```
 
 2. Сгенерировать код: `go run github.com/mosdev-tech/babble/cmd/babble gen`.
-   Появятся `internal/generated/**` и стаб `internal/api/get_by_id/handler.go`.
+   Появятся `internal/generated/**` и стаб `internal/api/handler/get_by_id/handler.go`.
 
 3. Написать тело хендлера — сигнатура задана контрактом:
 

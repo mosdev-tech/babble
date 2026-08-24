@@ -22,7 +22,7 @@ const (
 	GeneratedRoot = "internal/generated"
 	ServiceOut    = "internal/generated/service"
 	ClientsOut    = "internal/generated/clients"
-	StubRoot      = "internal/api"
+	StubRoot      = "internal/api/handler"
 )
 
 // ModulePath читает Go-модуль из go.mod корня сервиса: флага -module нет, врать
